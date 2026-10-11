@@ -163,11 +163,13 @@ const api=async path=>{
 };
 const key=()=>'skydle:'+S.date;
 
+let photoFailed=false;
 function renderCredit(){
   const el=$('#credit');
-  if(!S.has_photo){el.innerHTML='';return;}
+  if(!S.has_photo||photoFailed){el.innerHTML='';return;}
   const c=S.credit;
   if(c){
+    if(!over){el.innerHTML=S.test_mode?'<span>Credit is set. It will show when the game ends.</span>':'';return;}
     let h='Photo: '+esc(c.photographer);
     if(c.license)h+=' &middot; '+esc(c.license);
     if(c.url)h+=' &middot; <a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">Source</a>';
@@ -177,12 +179,13 @@ function renderCredit(){
   }else el.innerHTML='';
 }
 function renderPhoto(){
+  photoFailed=false;
   renderCredit();
   const box=$('#photoBox');
   const none='<div class="nopic"><span>&#128247;</span>No picture available</div>';
   if(!S.has_photo){box.innerHTML=none;return;}
   box.innerHTML='<img alt="Mystery aircraft" src="'+(S.photo_url||('/photo/today?t='+Date.now()))+'">';
-  box.querySelector('img').onerror=()=>{box.innerHTML=none;$('#credit').innerHTML='';};
+  box.querySelector('img').onerror=()=>{photoFailed=true;box.innerHTML=none;renderCredit();};
 }
 function fmt(v,u){if(v===null)return '?';return (Number.isInteger(v)?v:+v.toFixed(3))+u;}
 function cell(s){
@@ -203,7 +206,7 @@ function renderBoard(){
 }
 function save(){if(!S.test_mode)localStorage.setItem(key(),JSON.stringify(guesses));}
 async function finish(){
-  over=true;renderBoard();
+  over=true;renderBoard();renderCredit();
   const won=guesses.some(g=>g.correct);
   const r=await api('/api/reveal');
   const chips=(r.brand?`<span>Brand: ${esc(r.brand)}</span>`:'')+r.stats.map(s=>`<span>${s.label}: ${fmt(s.value,s.unit)}</span>`).join('');
@@ -291,7 +294,7 @@ async function setupTest(){
   $('#trand').onclick=async()=>{await api('/api/test/set?icao=random');reload();};
   $('#tdset').onclick=async()=>{if($('#tdate').value){await api('/api/test/date?d='+$('#tdate').value);reload();}};
   $('#ttoday').onclick=async()=>{await api('/api/test/clear');reload();};
-  $('#treset').onclick=()=>{guesses=[];over=false;$('#result').hidden=true;renderBoard();};
+  $('#treset').onclick=()=>{guesses=[];over=false;$('#result').hidden=true;renderBoard();renderCredit();};
   $('#treveal').onclick=()=>finish();
   $('#ans').textContent=S.answer.name+' ('+S.answer.icao+')';
 }
