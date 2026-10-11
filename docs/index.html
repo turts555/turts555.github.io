@@ -44,6 +44,7 @@ td.ok{background:var(--ok)} td.hi{background:var(--hi)} td.lo{background:var(--l
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chips span{background:#0d1d3d;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:.85rem}
 .legend{color:var(--mut);font-size:.85rem;margin-top:6px}
+.share{background:#0d1d3d;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 0 10px;white-space:pre-wrap;word-break:break-all;font-family:inherit;line-height:1.35}
 .credit{font-size:.8rem;color:var(--mut);margin-top:8px;text-align:center;min-height:1em}
 .credit a{color:#8fc1ff}
 .credit .warn{color:#ffb4b4}
@@ -210,8 +211,34 @@ async function finish(){
   $('#result').innerHTML=`<h2>${won?'&#127881; Correct in '+guesses.length+'/'+S.max_guesses+'!':'Out of guesses!'}</h2>
     <div>The aircraft was <b>${esc(r.name)}</b> (${esc(r.icao)}).</div>
     <div style="margin-top:8px">&#128214; <a href="${esc(r.wiki)}" target="_blank" rel="noopener">${esc(r.wiki)}</a></div>
-    <div class="chips">${chips}</div>`;
+    <div class="chips">${chips}</div>
+    <pre class="share" id="sharePrev"></pre>
+    <div><button id="shareBtn">Share results</button> <span id="shareMsg" class="legend"></span></div>`;
+  $('#sharePrev').textContent=shareText();
+  $('#shareBtn').onclick=doShare;
 }
+/* ---- share ---- */
+const SQ={correct:'\uD83D\uDFE9',higher:'\uD83D\uDFE8',lower:'\uD83D\uDFE6',wrong:'\uD83D\uDFE5'};
+const sq=r=>SQ[r]||'\u2B1C';
+function shareText(){
+  const won=guesses.some(g=>g.correct);
+  const rows=guesses.map(g=>sq(g.brand?g.brand.result:'')+g.stats.map(s=>sq(s.result)).join('')).join('\n');
+  return '\u2708\uFE0F Skydle '+S.date+' '+(won?guesses.length:'X')+'/'+S.max_guesses+'\n'+rows+'\n'+location.origin+location.pathname;
+}
+function fallbackCopy(t){
+  const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
+  let ok=false;try{ok=document.execCommand('copy');}catch(e){}ta.remove();
+  $('#shareMsg').textContent=ok?'Copied to clipboard!':'Could not copy - select the text above and copy it.';
+}
+async function doShare(){
+  const t=shareText();
+  try{
+    if(navigator.share&&/Android|iPhone|iPad/i.test(navigator.userAgent)){await navigator.share({text:t});return;}
+    await navigator.clipboard.writeText(t);
+    $('#shareMsg').textContent='Copied to clipboard!';
+  }catch(e){if(e&&e.name==='AbortError')return;fallbackCopy(t);}
+}
+/* ---- end share ---- */
 function setMsg(t){$('#msg').textContent=t||'';}
 
 /* ---- autocomplete ---- */
