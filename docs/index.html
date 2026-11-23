@@ -45,6 +45,11 @@ td.ok{background:var(--ok)} td.hi{background:var(--hi)} td.lo{background:var(--l
 .chips span{background:#0d1d3d;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:.85rem}
 .legend{color:var(--mut);font-size:.85rem;margin-top:6px}
 .share{background:#0d1d3d;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 0 10px;white-space:pre-wrap;word-break:break-all;font-family:inherit;line-height:1.35}
+[hidden]{display:none!important}
+.nav{display:flex;gap:8px;margin:0 0 12px}
+.nav a{color:var(--mut);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 16px;font-size:.9rem}
+.nav a.on{background:#2a5bd7;border-color:#2a5bd7;color:#fff;font-weight:600}
+.stats{color:var(--mut);margin:0 0 10px;font-size:.9rem}
 .credit{font-size:.8rem;color:var(--mut);margin-top:8px;text-align:center;min-height:1em}
 .credit a{color:#8fc1ff}
 .credit .warn{color:#ffb4b4}
@@ -54,8 +59,10 @@ td.ok{background:var(--ok)} td.hi{background:var(--hi)} td.lo{background:var(--l
 #test select{flex:1;min-width:220px}
 #ans{font-weight:700;color:#ffd27a}
 </style></head><body><div class="wrap">
-<h1>&#9992;&#65039; SKYDLE</h1>
+<h1 id="h1">&#9992;&#65039; SKYDLE</h1>
+<nav class="nav" id="nav" hidden><a href="./" id="navDaily">Daily</a><a href="endless.html" id="navEndless">Endless</a></nav>
 <p class="sub" id="date"></p>
+<div class="stats" id="stats" hidden></div>
 
 <div class="card" id="test" hidden>
   <h3>TEST MODE</h3>
@@ -93,12 +100,15 @@ td.ok{background:var(--ok)} td.hi{background:var(--hi)} td.lo{background:var(--l
   <div class="legend">&#9650; answer is higher &nbsp; &#9660; answer is lower &nbsp; &#10003; correct &nbsp; Brand: &#10003; same manufacturer, &#10007; different &nbsp; ? you guessed a plane with no data for that stat &nbsp; &ndash; answer has no data for that stat</div>
 </div>
 
+<div class="card" id="emptyMsg" hidden><b>Endless mode isn't ready yet.</b><br>It only uses planes that have a photo, and none of this week's planes have one yet. Please check back soon!</div>
+
 <div class="card" id="result" hidden></div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let S,PLANES=[],guesses=[],over=false,selected=null,items=[],idx=-1;
+const MODE=window.SKYDLE_MODE||'daily',EP=MODE==='endless';
+let S,PLANES=[],guesses=[],over=false,selected=null,items=[],idx=-1,recorded=false;
 let DATA=null;
 const LABELS=['Year','Wingspan','Speed','Weight','Seats','Rarity'];
 const UNITS={Year:'',Wingspan:' m',Speed:' kts',Weight:' t',Seats:'',Rarity:''};
@@ -152,7 +162,7 @@ async function wikiLink(p){
 const api=async path=>{
   await loadData();
   const u=new URL(path,'http://x'),a=await pickFor(easternDate());
-  if(u.pathname==='/api/state')return {date:easternDate(),max_guesses:DATA.max_guesses,test_mode:false,has_photo:!!a.photo,
+  if(u.pathname==='/api/state')return {date:easternDate(),max_guesses:DATA.max_guesses,test_mode:false,endless:!!DATA.endless,has_photo:!!a.photo,
     credit:a.credit||null,photo_url:a.photo?'photos/'+encodeURIComponent(a.photo):null};
   if(u.pathname==='/api/planes')return DATA.planes.map(p=>({icao:p.icao,name:p.name}));
   if(u.pathname==='/api/guess'){const g=DATA.planes.find(p=>p.icao.toUpperCase()===(u.searchParams.get('icao')||'').toUpperCase());
@@ -204,10 +214,32 @@ function renderBoard(){
   $('#count').textContent=over?'Game over':`Guess ${guesses.length+1} of ${S.max_guesses}`;
   $('#play').style.display=over?'none':'';
 }
-function save(){if(!S.test_mode)localStorage.setItem(key(),JSON.stringify(guesses));}
+function save(){if(!S.test_mode&&!EP)localStorage.setItem(key(),JSON.stringify(guesses));}
+/* ---- endless stats (kept in this browser) ---- */
+const SKEY='skydle:endless:stats';
+const blank=()=>({played:0,won:0,guesses:0,streak:0,best:0});
+function loadStats(){try{return Object.assign(blank(),JSON.parse(localStorage.getItem(SKEY)||'{}'));}catch(e){return blank();}}
+function recordEndless(won,n){
+  const s=loadStats();s.played++;
+  if(won){s.won++;s.guesses+=n;s.streak++;s.best=Math.max(s.best,s.streak);}else s.streak=0;
+  try{localStorage.setItem(SKEY,JSON.stringify(s));}catch(e){}
+}
+function renderStats(){
+  if(!EP)return;
+  const s=loadStats(),el=$('#stats');el.hidden=false;
+  el.textContent='Round '+(s.played+(over?0:1))+' \u00b7 Won '+s.won+'/'+s.played+' \u00b7 Streak '+s.streak+' (best '+s.best+')'+(s.won?' \u00b7 Avg '+(s.guesses/s.won).toFixed(1)+' guesses':'');
+}
+async function newRound(){
+  S=await api('/api/new');
+  if(S.empty){location.reload();return;}
+  guesses=[];over=false;recorded=false;selected=null;items=[];
+  $('#result').hidden=true;$('#guess').value='';setMsg('');draw();
+  renderPhoto();renderBoard();renderStats();$('#guess').focus();
+}
 async function finish(){
   over=true;renderBoard();renderCredit();
   const won=guesses.some(g=>g.correct);
+  if(EP&&!recorded){recorded=true;recordEndless(won,guesses.length);renderStats();}
   const r=await api('/api/reveal');
   const chips=(r.brand?`<span>Brand: ${esc(r.brand)}</span>`:'')+r.stats.map(s=>`<span>${s.label}: ${fmt(s.value,s.unit)}</span>`).join('');
   $('#result').hidden=false;
@@ -215,10 +247,12 @@ async function finish(){
     <div>The aircraft was <b>${esc(r.name)}</b> (${esc(r.icao)}).</div>
     <div style="margin-top:8px">&#128214; <a href="${esc(r.wiki)}" target="_blank" rel="noopener">${esc(r.wiki)}</a></div>
     <div class="chips">${chips}</div>
+    ${EP?'<div style="margin-top:12px"><button id="nextBtn">Play another plane &#10140;</button></div>':''}
     <pre class="share" id="sharePrev"></pre>
     <div><button id="shareBtn">Share results</button> <span id="shareMsg" class="legend"></span></div>`;
   $('#sharePrev').textContent=shareText();
   $('#shareBtn').onclick=doShare;
+  if(EP)$('#nextBtn').onclick=newRound;
 }
 /* ---- share ---- */
 const SQ={correct:'\uD83D\uDFE9',higher:'\uD83D\uDFE8',lower:'\uD83D\uDFE6',wrong:'\uD83D\uDFE5'};
@@ -226,7 +260,7 @@ const sq=r=>SQ[r]||'\u2B1C';
 function shareText(){
   const won=guesses.some(g=>g.correct);
   const rows=guesses.map(g=>sq(g.brand?g.brand.result:'')+g.stats.map(s=>sq(s.result)).join('')).join('\n');
-  return '\u2708\uFE0F Skydle '+S.date+' '+(won?guesses.length:'X')+'/'+S.max_guesses+'\n'+rows+'\n'+location.origin+location.pathname;
+  return '\u2708\uFE0F Skydle '+(EP?'Endless':S.date)+' '+(won?guesses.length:'X')+'/'+S.max_guesses+'\n'+rows+'\n'+location.origin+location.pathname;
 }
 function fallbackCopy(t){
   const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
@@ -300,13 +334,23 @@ async function setupTest(){
 }
 
 (async function init(){
-  S=await api('/api/state');PLANES=await api('/api/planes');
-  $('#date').textContent=new Date(S.date+'T12:00:00').toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})
-    +' - guess the aircraft in '+S.max_guesses+' tries';
+  S=await api(EP?'/api/new':'/api/state');PLANES=await api('/api/planes');
+  if(EP){
+    document.title='Skydle Endless';
+    $('#h1').innerHTML='&#9992;&#65039; SKYDLE <small style="font-size:.5em;color:var(--mut)">ENDLESS</small>';
+    $('#date').textContent='A new random plane every round: guess it in '+S.max_guesses+' tries, then play another. This week\'s list: '+S.source+' ('+S.pool+' planes, '+S.playable+' with photos)';
+  }else{
+    $('#date').textContent=new Date(S.date+'T12:00:00').toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})
+      +' - guess the aircraft in '+S.max_guesses+' tries';
+  }
+  if(S.endless){$('#nav').hidden=false;$(EP?'#navEndless':'#navDaily').classList.add('on');}
+  if(EP&&S.empty){
+    $('#emptyMsg').hidden=false;$('#play').style.display='none';$('#photoBox').closest('.card').hidden=true;renderStats();return;
+  }
   renderPhoto();
   if(S.test_mode)await setupTest();
-  else{try{guesses=JSON.parse(localStorage.getItem(key())||'[]');}catch(e){guesses=[];}}
-  renderBoard();
-  if(guesses.some(g=>g.correct)||guesses.length>=S.max_guesses)await finish();
+  else if(!EP){try{guesses=JSON.parse(localStorage.getItem(key())||'[]');}catch(e){guesses=[];}}
+  renderBoard();renderStats();
+  if(!EP&&(guesses.some(g=>g.correct)||guesses.length>=S.max_guesses))await finish();
 })();
 </script></body></html>
