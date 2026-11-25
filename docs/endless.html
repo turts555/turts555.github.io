@@ -63,6 +63,7 @@ td.ok{background:var(--ok)} td.hi{background:var(--hi)} td.lo{background:var(--l
 <nav class="nav" id="nav" hidden><a href="./" id="navDaily">Daily</a><a href="endless.html" id="navEndless">Endless</a></nav>
 <p class="sub" id="date"></p>
 <div class="stats" id="stats" hidden></div>
+<div class="stats" id="endlessInfo" hidden></div>
 
 <div class="card" id="test" hidden>
   <h3>TEST MODE</h3>
@@ -112,7 +113,7 @@ let S,PLANES=[],guesses=[],over=false,selected=null,items=[],idx=-1,recorded=fal
 let DATA=null,CUR=null,BAG=[],LAST=null,ROUND=0;
 const LABELS=['Year','Wingspan','Speed','Weight','Seats','Rarity'];
 const UNITS={Year:'',Wingspan:' m',Speed:' kts',Weight:' t',Seats:'',Rarity:''};
-const loadData=async()=>{if(!DATA){DATA=await (await fetch('endless.json')).json();}return DATA;};
+const loadData=async()=>{if(!DATA){DATA=await (await fetch('endless.json',{cache:'no-cache'})).json();}return DATA;};
 function cmp(g,a){if(a===null)return 'nodata';if(g===null)return 'unknown';if(g===a)return 'correct';return a>g?'higher':'lower';}
 function cmpBrand(g,a){if(!a)return 'nodata';if(!g)return 'unknown';return g.toUpperCase()===a.toUpperCase()?'correct':'wrong';}
 function judge(g,a){return {icao:g.icao,name:g.name,correct:g.icao===a.icao,brand:{value:g.brand,result:cmpBrand(g.brand,a.brand)},
@@ -135,8 +136,9 @@ function pickNextPlane(){
   CUR=BAG.pop();LAST=CUR;ROUND++;
 }
 const stateOf=()=>{
-  const base={date:'',max_guesses:DATA.max_guesses,test_mode:false,endless:true,source:DATA.source,pool:DATA.planes.length,
-    playable:DATA.planes.filter(p=>p.eligible&&p.photo).length,round:ROUND};
+  const L=DATA.planes,usable=L.filter(p=>p.eligible&&p.photo).length,nop=L.filter(p=>!p.photo).length;
+  const base={date:'',max_guesses:DATA.max_guesses,test_mode:false,endless:true,source:DATA.source,pool:L.length,
+    playable:usable,no_photo:nop,few_stats:L.length-usable-nop,built:DATA.built||'',round:ROUND};
   if(!CUR)return Object.assign(base,{empty:true,has_photo:false,credit:null,photo_url:null});
   return Object.assign(base,{has_photo:true,credit:CUR.credit||null,photo_url:'photos/'+encodeURIComponent(CUR.photo)});
 };
@@ -326,6 +328,10 @@ async function setupTest(){
       +' - guess the aircraft in '+S.max_guesses+' tries';
   }
   if(S.endless){$('#nav').hidden=false;$(EP?'#navEndless':'#navDaily').classList.add('on');}
+  if(EP){
+    const info=$('#endlessInfo');info.hidden=false;
+    info.textContent='Playable: '+S.playable+' \u00b7 Missing a photo: '+S.no_photo+' \u00b7 Photo but fewer than 4 stats: '+S.few_stats+(S.built?' \u00b7 Site data built '+S.built:'');
+  }
   if(EP&&S.empty){
     $('#emptyMsg').hidden=false;$('#play').style.display='none';$('#photoBox').closest('.card').hidden=true;renderStats();return;
   }

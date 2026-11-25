@@ -63,6 +63,7 @@ td.ok{background:var(--ok)} td.hi{background:var(--hi)} td.lo{background:var(--l
 <nav class="nav" id="nav" hidden><a href="./" id="navDaily">Daily</a><a href="endless.html" id="navEndless">Endless</a></nav>
 <p class="sub" id="date"></p>
 <div class="stats" id="stats" hidden></div>
+<div class="stats" id="endlessInfo" hidden></div>
 
 <div class="card" id="test" hidden>
   <h3>TEST MODE</h3>
@@ -112,7 +113,7 @@ let S,PLANES=[],guesses=[],over=false,selected=null,items=[],idx=-1,recorded=fal
 let DATA=null;
 const LABELS=['Year','Wingspan','Speed','Weight','Seats','Rarity'];
 const UNITS={Year:'',Wingspan:' m',Speed:' kts',Weight:' t',Seats:'',Rarity:''};
-const loadData=async()=>{if(!DATA){DATA=await (await fetch('data.json')).json();}return DATA;};
+const loadData=async()=>{if(!DATA){DATA=await (await fetch('data.json',{cache:'no-cache'})).json();}return DATA;};
 const easternDate=(d=new Date())=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
 /* Exact copy of Python's random.Random(date_string).choice(sorted_list), so the website
    picks the same plane as the local game. */
@@ -344,6 +345,10 @@ async function setupTest(){
       +' - guess the aircraft in '+S.max_guesses+' tries';
   }
   if(S.endless){$('#nav').hidden=false;$(EP?'#navEndless':'#navDaily').classList.add('on');}
+  if(EP){
+    const info=$('#endlessInfo');info.hidden=false;
+    info.textContent='Playable: '+S.playable+' \u00b7 Missing a photo: '+S.no_photo+' \u00b7 Photo but fewer than 4 stats: '+S.few_stats+(S.built?' \u00b7 Site data built '+S.built:'');
+  }
   if(EP&&S.empty){
     $('#emptyMsg').hidden=false;$('#play').style.display='none';$('#photoBox').closest('.card').hidden=true;renderStats();return;
   }
